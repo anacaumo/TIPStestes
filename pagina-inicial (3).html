@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Treino de Tradução Juramentada</title>
+    <meta name="description" content="Ferramenta de estudo para treinar a justificativa de escolhas de tradução em simultânea (inglês → português), com vídeo, transcrições lado a lado e perguntas de avaliador.">
+    <!-- Tema: mesma chave de armazenamento das páginas dos vídeos, então a escolha (claro/escuro) vale para todas -->
+    <script>
+        (function () {
+            var dark = false;
+            try { dark = !!(window.matchMedia && matchMedia('(prefers-color-scheme: dark)').matches); } catch (e) {}
+            try { var saved = localStorage.getItem('translationPracticeTheme'); if (saved) dark = saved === 'dark'; } catch (e) {}
+            if (dark) document.documentElement.classList.add('dark');
+        })();
+    </script>
+    <style>
+        /* ================= Paleta: a mesma das páginas dos vídeos (slate + indigo; Material 3 no escuro) ================= */
+        :root {
+            --bg: #f8fafc;            /* slate-50 */
+            --surface: #ffffff;
+            --surface-2: #f1f5f9;     /* slate-100 */
+            --surface-3: #e2e8f0;     /* slate-200 */
+            --border: #e2e8f0;
+            --border-strong: #cbd5e1;
+            --text: #1e293b;          /* slate-800 */
+            --text-2: #475569;        /* slate-600 */
+            --muted: #64748b;         /* slate-500 */
+            --primary: #4f46e5;       /* indigo-600 */
+            --primary-hover: #4338ca;
+            --on-primary: #ffffff;
+            --accent-text: #4338ca;   /* indigo-700 */
+            --accent-strong: #312e81; /* indigo-900 */
+            --accent-bg: #e0e7ff;     /* indigo-100 */
+            --accent-soft: #eef2ff;   /* indigo-50 */
+            --accent-border: #a5b4fc; /* indigo-300 */
+            --accent-border-soft: #c7d2fe;
+            --warn-bg: #fef3c7; --warn-soft: #fffbeb; --warn-text: #92400e; --warn-border: #fcd34d;
+            --ok-bg: #d1fae5; --ok-text: #065f46;
+            --shadow: 0 1px 2px rgba(15, 23, 42, .06);
+            --shadow-md: 0 4px 10px -2px rgba(15, 23, 42, .12);
+            --mark: #fde68a;
+            --hero: linear-gradient(135deg, #eef2ff 0%, #f8fafc 70%);
+        }
+        html.dark {
+            color-scheme: dark;
+            --bg: #141318;
+            --surface: #2a292e;
+            --surface-2: #201f24;
+            --surface-3: #353439;
+            --border: #474550;
+            --border-strong: #928f9b;
+            --text: #e3e2e8;
+            --text-2: #c7c5d2;
+            --muted: #c7c5d2;
+            --primary: #c9bfff;
+            --primary-hover: #bbb3f4;
+            --on-primary: #1f2774;
+            --accent-text: #c9bfff;
+            --accent-strong: #e5deff;
+            --accent-bg: #3d3d8e;
+            --accent-soft: #37353f;
+            --accent-border: #8f85e1;
+            --accent-border-soft: #3d3d8e;
+            --warn-bg: #4a3a1c; --warn-soft: #3a3534; --warn-text: #ffddba; --warn-border: #bc8642;
+            --ok-bg: #015236; --ok-text: #88f8c5;
+            --shadow: 0 1px 2px rgba(0, 0, 0, .35);
+            --shadow-md: 0 4px 10px -2px rgba(0, 0, 0, .55);
+            --mark: rgba(250, 204, 21, .35);
+            --hero: linear-gradient(135deg, #34323f 0%, #141318 70%);
+        }
+
+        * { box-sizing: border-box; }
+        html { scroll-behavior: smooth; }
+        body {
+            margin: 0; background: var(--bg); color: var(--text); line-height: 1.6;
+            font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+        }
+        ::selection { background: var(--accent-bg); color: var(--accent-strong); }
+        a { color: inherit; }
+        h1, h2, h3, p { margin: 0; }
+        :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; }
+
+        /* ================= Cantos (igual às outras páginas): crédito à esquerda, tema à direita ================= */
+        .credit { position: fixed; top: .5rem; left: .75rem; z-index: 20; font-size: 11px; color: var(--accent-text); pointer-events: none; }
+        .credit b { font-weight: 600; }
+        .chrome { position: fixed; top: .5rem; right: .75rem; z-index: 20; display: flex; background: var(--surface); border: 1px solid var(--border); border-radius: .75rem; box-shadow: var(--shadow-md); padding: .25rem; }
+        .chrome-btn { display: flex; align-items: center; gap: .5rem; font: inherit; font-size: .75rem; font-weight: 600; padding: .375rem .625rem; border: 0; border-radius: .5rem; background: transparent; color: var(--text-2); cursor: pointer; white-space: nowrap; transition: background .15s; }
+        .chrome-btn:hover { background: var(--surface-2); }
+        #theme-btn .icon-sun { display: none; }
+        html.dark #theme-btn .icon-sun { display: inline; }
+        html.dark #theme-btn .icon-moon { display: none; }
+
+        /* ================= Estrutura ================= */
+        .wrap { max-width: 64rem; margin: 0 auto; padding: 3.5rem 1.5rem 3rem; }
+        section { margin-top: 3.5rem; }
+        .eyebrow { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+        h2.title { font-size: 1.375rem; font-weight: 700; color: var(--text); margin-top: .25rem; }
+        .section-lead { color: var(--text-2); margin-top: .5rem; max-width: 42rem; font-size: .9375rem; }
+        .card { background: var(--surface); border: 1px solid var(--border); border-radius: .75rem; box-shadow: var(--shadow); }
+        .pill { display: inline-flex; align-items: center; gap: .375rem; font-size: .75rem; font-weight: 600; padding: .375rem .75rem; border-radius: 9999px; background: var(--accent-bg); color: var(--accent-text); white-space: nowrap; }
+        .btn { display: inline-flex; align-items: center; gap: .5rem; font: inherit; font-size: .8125rem; font-weight: 600; padding: .5rem 1rem; border-radius: .5rem; border: 1px solid transparent; text-decoration: none; cursor: pointer; transition: background .15s, border-color .15s; box-shadow: var(--shadow); }
+        .btn-primary { background: var(--primary); color: var(--on-primary); }
+        .btn-primary:hover { background: var(--primary-hover); }
+        .btn-ghost { background: var(--surface); color: var(--accent-text); border-color: var(--accent-border); }
+        .btn-ghost:hover { background: var(--accent-soft); }
+        svg.i { flex-shrink: 0; }
+
+        /* ================= Hero ================= */
+        .hero { background: var(--hero); border: 1px solid var(--border); border-radius: 1.25rem; padding: 2.5rem 2rem; display: grid; gap: 2rem; grid-template-columns: minmax(0, 1fr); box-shadow: var(--shadow); }
+        .hero h1 { font-size: clamp(1.75rem, 4.2vw, 2.5rem); font-weight: 800; line-height: 1.15; letter-spacing: -.02em; color: var(--text); margin-top: 1rem; }
+        .hero h1 span { color: var(--accent-text); }
+        .hero p.lead { margin-top: 1rem; color: var(--text-2); font-size: 1rem; max-width: 38rem; }
+        .hero .cta { margin-top: 1.5rem; display: flex; flex-wrap: wrap; gap: .75rem; }
+        .stats { margin-top: 1.75rem; display: flex; flex-wrap: wrap; gap: .5rem; }
+
+        /* ================= Prévia da ferramenta ================= */
+        .mock { overflow: hidden; }
+        .mock-bar { display: flex; flex-wrap: wrap; gap: .25rem; padding: .5rem; background: var(--surface-2); border-bottom: 1px solid var(--border); }
+        .mock-tab { font-size: 11px; font-weight: 600; padding: .25rem .625rem; border-radius: .5rem; color: var(--text-2); }
+        .mock-tab.on { background: var(--accent-bg); color: var(--accent-text); }
+        .mock-body { padding: 1rem; display: grid; gap: .875rem; }
+        .cols { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: .5rem; }
+        .box { border: 1px solid var(--border); border-radius: .75rem; padding: .625rem .75rem; box-shadow: var(--shadow); background: var(--sp-bg); border-left: 4px solid var(--sp-bd); }
+        html.dark .box { background: var(--sp-bgd); border-left-color: var(--sp-bdd); }
+        .box .head { display: flex; align-items: center; gap: .5rem; margin-bottom: .375rem; }
+        .box .who { font-size: 11px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        .box .time { font: 600 10px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--muted); background: var(--surface); padding: .125rem .375rem; border-radius: .25rem; }
+        .box .tag { margin-left: auto; font-size: 9px; font-weight: 700; padding: .0625rem .4375rem; border-radius: 9999px; background: var(--surface); color: var(--text-2); border: 1px solid var(--border); }
+        .box p { font-size: 12px; line-height: 1.55; color: var(--text-2); }
+        .expr-mark { background: var(--mark); color: inherit; border-radius: 3px; padding: 0 2px; }
+        .qcard { border: 1px solid var(--border); border-radius: .75rem; padding: 1rem; background: var(--surface); }
+        .qhead { display: flex; flex-wrap: wrap; align-items: center; gap: .5rem; }
+        .qnum { width: 1.75rem; height: 1.75rem; border-radius: 9999px; background: var(--accent-bg); color: var(--accent-text); display: inline-flex; align-items: center; justify-content: center; font-size: 11px; font-weight: 700; }
+        .qexpr { font-weight: 600; font-size: .875rem; }
+        .qtime { font: 600 11px ui-monospace, SFMono-Regular, Menlo, monospace; color: var(--accent-text); border: 1px solid var(--accent-border); border-radius: .5rem; padding: .125rem .5rem; }
+        .label { font-size: 10px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: .75rem 0 .125rem; }
+        .qcard p.t { font-size: 12.5px; color: var(--text-2); }
+        .reveal { margin-top: .75rem; font: inherit; font-size: 11px; font-weight: 600; padding: .375rem .75rem; border-radius: .5rem; border: 0; cursor: pointer; background: var(--primary); color: var(--on-primary); }
+        .reveal.open { background: var(--surface-3); color: var(--text-2); }
+        .answer { display: none; margin-top: .75rem; background: var(--accent-soft); border: 1px solid var(--accent-border-soft); border-radius: .75rem; padding: .875rem; }
+        .answer.open { display: block; }
+        .rates { display: flex; flex-wrap: wrap; gap: .375rem; margin-top: .625rem; align-items: center; }
+        .rates span.q { font-size: 11px; font-weight: 600; color: var(--muted); margin-right: .25rem; }
+        .rate { font-size: 11px; font-weight: 600; padding: .25rem .625rem; border-radius: .5rem; border: 1px solid var(--border-strong); background: var(--surface); color: var(--text-2); }
+        .rate.ok { background: var(--ok-bg); color: var(--ok-text); border-color: var(--border); }
+        .caption { font-size: 11px; color: var(--muted); text-align: center; margin-top: .625rem; }
+
+        /* ================= Vídeos ================= */
+        .grid { display: grid; gap: 1rem; margin-top: 1.5rem; }
+        .grid.videos { grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); }
+        .grid.feat { grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); }
+        .vcard { display: flex; flex-direction: column; padding: 1.25rem; text-decoration: none; transition: border-color .15s, box-shadow .15s, transform .15s; }
+        .vcard:hover { border-color: var(--accent-border); box-shadow: var(--shadow-md); transform: translateY(-2px); }
+        .vtop { display: flex; align-items: center; justify-content: space-between; gap: .5rem; }
+        .badge-prova { display: inline-flex; align-items: center; gap: .25rem; font-size: 11px; font-weight: 700; padding: .25rem .5rem; border-radius: 9999px; background: var(--ok-bg); color: var(--ok-text); white-space: nowrap; }
+        .vcard .n {width: 2rem; height: 2rem; border-radius: 9999px; background: var(--accent-bg); color: var(--accent-text); display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: .75rem; box-shadow: var(--shadow); }
+        .vcard h3 { font-size: 1.0625rem; font-weight: 700; margin-top: .875rem; color: var(--text); }
+        .vcard .sub { font-size: .8125rem; color: var(--muted); margin-top: .125rem; }
+        .vcard .desc { font-size: .875rem; color: var(--text-2); margin-top: .75rem; flex: 1; }
+        .vnote { margin-top: .75rem; font-size: .8125rem; line-height: 1.5; color: var(--text-2); background: var(--warn-soft); border: 1px solid var(--warn-border); border-radius: .5rem; padding: .5rem .75rem; }
+        .vnote b { color: var(--warn-text); }
+        .meta { display: flex; flex-wrap: wrap; gap: .375rem; margin-top: 1rem; }
+        .chip { font-size: 11px; font-weight: 600; padding: .125rem .5rem; border-radius: 9999px; background: var(--surface-2); color: var(--text-2); border: 1px solid var(--border); }
+        .vcard .go { margin-top: 1rem; display: inline-flex; align-items: center; gap: .375rem; font-size: .8125rem; font-weight: 700; color: var(--accent-text); }
+        .vcard.soon { border-style: dashed; border-color: var(--border-strong); background: transparent; box-shadow: none; align-items: center; justify-content: center; text-align: center; color: var(--muted); min-height: 11rem; }
+        .vcard.soon:hover { transform: none; box-shadow: none; border-color: var(--border-strong); }
+        .vcard.soon strong { color: var(--text-2); font-size: .9375rem; }
+        .vcard.soon span { font-size: .8125rem; margin-top: .25rem; }
+
+        /* seletor de idioma dos vídeos */
+        .seg { display: inline-flex; flex-wrap: wrap; gap: .25rem; padding: .25rem; margin-top: 1.25rem; background: var(--surface-2); border: 1px solid var(--border); border-radius: .75rem; }
+        .seg button { font: inherit; font-size: .8125rem; font-weight: 600; padding: .375rem .875rem; border: 0; border-radius: .5rem; background: transparent; color: var(--text-2); cursor: pointer; transition: background .15s; }
+        .seg button:hover { background: var(--surface-3); }
+        .seg button[aria-pressed="true"] { background: var(--surface); color: var(--accent-text); box-shadow: var(--shadow); }
+        .seg .c { font-weight: 500; opacity: .7; margin-left: .25rem; }
+
+        /* ================= Como funciona / estudar ================= */
+        .feat .card { padding: 1.125rem; }
+        .ico { width: 2.25rem; height: 2.25rem; border-radius: .625rem; background: var(--accent-bg); color: var(--accent-text); display: flex; align-items: center; justify-content: center; }
+        .feat h3 { font-size: .9375rem; font-weight: 700; margin-top: .75rem; }
+        .feat p { font-size: .8125rem; color: var(--text-2); margin-top: .25rem; }
+        .steps { counter-reset: s; display: grid; gap: .75rem; margin-top: 1.5rem; padding: 0; list-style: none; }
+        .steps li { counter-increment: s; display: flex; gap: .875rem; align-items: flex-start; padding: .875rem 1rem; }
+        .steps li::before { content: counter(s); width: 1.75rem; height: 1.75rem; border-radius: 9999px; background: var(--primary); color: var(--on-primary); font-weight: 700; font-size: .75rem; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .steps b { color: var(--text); }
+        .steps p { font-size: .875rem; color: var(--text-2); }
+
+        /* ================= Limitações ================= */
+        .warn { background: var(--warn-soft); border: 1px solid var(--warn-border); border-radius: 1rem; padding: 1.5rem; }
+        .warn .eyebrow { color: var(--warn-text); }
+        .warn h2.title { color: var(--warn-text); }
+        .warn .section-lead { color: var(--text-2); }
+        .lims { display: grid; gap: .75rem; margin-top: 1.25rem; grid-template-columns: repeat(auto-fill, minmax(17rem, 1fr)); }
+        .lim { background: var(--surface); border: 1px solid var(--border); border-radius: .75rem; padding: 1rem; }
+        /* ícone alinhado à primeira linha do título (line-height do título = altura do ícone), mesmo quando o título quebra em duas linhas */
+        .lim h3 { font-size: .875rem; font-weight: 700; line-height: 1.5rem; display: flex; align-items: flex-start; gap: .5rem; }
+        .lim h3 .dot { width: 1.5rem; height: 1.5rem; border-radius: 9999px; background: var(--warn-bg); color: var(--warn-text); display: inline-flex; align-items: center; justify-content: center; flex-shrink: 0; }
+        .lim p { font-size: .8125rem; color: var(--text-2); margin-top: .375rem; }
+
+        footer { margin-top: 3.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border); font-size: .75rem; color: var(--muted); display: flex; flex-wrap: wrap; justify-content: space-between; gap: .75rem; }
+        footer b { color: var(--accent-text); font-weight: 600; }
+        footer p { max-width: 40rem; }
+
+        @media (min-width: 60rem) { .hero { grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr); align-items: center; padding: 2.75rem; } }
+        @media (max-width: 36rem) { .wrap { padding-left: 1rem; padding-right: 1rem; } .hero { padding: 1.5rem 1.25rem; } .cols { grid-template-columns: minmax(0, 1fr); } .chrome-btn span { display: none; } }
+        @media (prefers-reduced-motion: reduce) { html { scroll-behavior: auto; } .vcard { transition: none; } }
+    </style>
+</head>
+<body>
+
+    <p class="credit">Criado por <b>Ana Carolina Caumo</b></p>
+    <div class="chrome">
+        <button id="theme-btn" class="chrome-btn" type="button" aria-pressed="false" aria-label="Mudar para o modo escuro" title="Mudar para o modo escuro">
+            <svg class="icon-moon i" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+            <svg class="icon-sun i" xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4"></circle><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"></path></svg>
+            <span id="theme-label">Modo escuro</span>
+        </button>
+    </div>
+
+    <div class="wrap">
+
+        <!-- ================= Hero ================= -->
+        <header class="hero">
+            <div>
+                <span class="pill">Tradução simultânea · para o português</span>
+                <h1>Treino de <span>Tradução Juramentada</span></h1>
+                <p class="lead">
+                    Uma ferramenta de estudo para treinar a <b>justificativa das escolhas de tradução</b>, no estilo de uma prova oral.
+                    Você assiste a um vídeo real, acompanha as transcrições no idioma original e em português lado a lado e responde às perguntas
+                    de um avaliador do tipo “como você traduziu X? Justifique”.                </p>
+                <div class="cta">
+                    <a class="btn btn-primary" href="#videos">Ver os vídeos
+                        <svg class="i" xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="12" y1="5" x2="12" y2="19"></line><polyline points="19 12 12 19 5 12"></polyline></svg>
+                    </a>
+                    <a class="btn btn-ghost" href="#limitacoes">Leia antes: limitações</a>
+                </div>
+                <div class="stats" id="stats"></div>
+            </div>
+
+            <!-- Prévia ilustrativa (não é a ferramenta de verdade, só um recorte) -->
+            <div>
+                <div class="card mock" aria-label="Prévia da ferramenta">
+                    <div class="mock-bar" aria-hidden="true">
+                        <span class="mock-tab on">Transcrições</span>
+                        <span class="mock-tab">Só vídeo</span>
+                        <span class="mock-tab">Perguntas do avaliador</span>
+                    </div>
+                    <div class="mock-body">
+                        <div class="cols">
+                            <div class="box" style="--sp-bg:hsl(205,80%,96%);--sp-bgd:hsl(205,24%,19%);--sp-bd:hsl(205,55%,62%);--sp-bdd:hsl(205,50%,60%);">
+                                <div class="head"><span class="who">Celeste Saulo</span><span class="time">00:01:18</span><span class="tag">EN</span></div>
+                                <p>… So <mark class="expr-mark">literally off the charts</mark> we have used for the past four decades.</p>
+                            </div>
+                            <div class="box" style="--sp-bg:hsl(205,80%,96%);--sp-bgd:hsl(205,24%,19%);--sp-bd:hsl(205,55%,62%);--sp-bdd:hsl(205,50%,60%);">
+                                <div class="head"><span class="who">Celeste Saulo</span><span class="time">00:01:18</span><span class="tag">PT</span></div>
+                                <p>… Ou seja, <mark class="expr-mark">literalmente fora dos gráficos</mark> que usamos nas últimas quatro décadas.</p>
+                            </div>
+                        </div>
+
+                        <div class="qcard">
+                            <div class="qhead">
+                                <span class="qnum">3</span>
+                                <span class="qexpr">“off the charts”</span>
+                                <span class="qtime">3:04</span>
+                            </div>
+                            <div class="label">Question</div>
+                            <p class="t">At about 3 minutes 4 seconds, how did you translate “off the charts”? Justify your answer.</p>
+                            <button class="reveal" id="demo-reveal" type="button" aria-expanded="false">Mostrar tradução e resposta</button>
+                            <div class="answer" id="demo-answer">
+                                <div class="label" style="margin-top:0">Resposta</div>
+                                <p class="t">Mantive a imagem concreta (“fora dos gráficos”), porque o valor ultrapassa mesmo a escala que a organização usa. “Fora de série” seria uma armadilha: sugere qualidade, não magnitude.</p>
+                                <div class="rates"><span class="q">Como foi a sua resposta?</span><span class="rate ok">✓ Acertei</span><span class="rate">Quase</span><span class="rate">Errei</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <p class="caption">Prévia ilustrativa · clique em “Mostrar tradução e resposta”</p>
+            </div>
+        </header>
+
+        <!-- ================= Vídeos ================= -->
+        <section id="videos">
+            <div class="eyebrow">Material disponível</div>
+            <h2 class="title">Escolha um vídeo para treinar</h2>
+            <p class="section-lead">Cada vídeo tem a sua própria página, com transcrições no idioma original e em português e um conjunto de perguntas de avaliador.</p>
+            <div class="seg" id="lang-seg" role="group" aria-label="Idioma dos vídeos"></div>
+            <div class="grid videos" id="video-grid"></div>
+            <noscript>
+                <p class="section-lead">
+                    <a href="https://anacaumo.github.io/TIPSingles1/">Entrevista com Mark Carney</a> ·
+                    <a href="https://anacaumo.github.io/TIPSingles2/">Coletiva da OMM sobre o El Niño</a> ·
+                    <a href="https://anacaumo.github.io/TIPSingles3/">Discurso de Andy Burnham</a> ·
+                    <a href="https://anacaumo.github.io/TIPSingles4/">Coletiva da Procuradoria de São Francisco</a> ·
+                    <a href="https://anacaumo.github.io/TIPSrusso1/">Coletiva de Serguei Lavrov (russo)</a> ·
+                    <a href="https://anacaumo.github.io/TIPSrusso2/">Entrevista de Volodymyr Zelensky (russo)</a> ·
+                    <a href="https://anacaumo.github.io/TIPSitaliano1/">Coletiva de Giorgia Meloni (italiano)</a>
+                </p>
+            </noscript>
+        </section>
+
+        <!-- ================= O que a ferramenta faz ================= -->
+        <section id="como">
+            <div class="eyebrow">O que tem dentro</div>
+            <h2 class="title">Como a ferramenta funciona</h2>
+            <p class="section-lead">Cada página de vídeo tem três modos, que você alterna no canto superior direito.</p>
+            <div class="grid feat" id="feat-grid"></div>
+
+            <h2 class="title" style="margin-top:2.5rem;font-size:1.125rem">Uma sugestão de rotina de estudo</h2>
+            <ol class="steps">
+                <li class="card"><div><b>Assista com as transcrições.</b><p>No modo “Transcrições”, acompanhe o vídeo com inglês e português lado a lado. Clique em qualquer turno para pular para aquele ponto.</p></div></li>
+                <li class="card"><div><b>Passe para as perguntas.</b><p>No modo “Perguntas do avaliador”, leia a pergunta e responda <i>em voz alta</i>, como faria na prova, antes de abrir o gabarito.</p></div></li>
+                <li class="card"><div><b>Use o trecho e o vídeo.</b><p>Se precisar do contexto, abra o trecho da transcrição com a expressão destacada ou clique no horário para ouvir a fala original.</p></div></li>
+                <li class="card"><div><b>Compare e se avalie.</b><p>Confira a resposta, marque “Acertei”, “Quase” ou “Errei” e depois filtre por “Para rever” para voltar só ao que ficou fraco.</p></div></li>
+            </ol>
+        </section>
+
+        <!-- ================= Limitações ================= -->
+        <section id="limitacoes">
+            <div class="warn">
+                <div class="eyebrow">Leia antes de usar</div>
+                <h2 class="title">Limitações e avisos</h2>
+                <p class="section-lead">
+                    A ferramenta foi feita para dar uma <b>boa ideia geral</b> de como justificar escolhas de tradução. Não é um gabarito oficial, e discordar do que está aqui faz parte do treino.
+                </p>
+                <div class="lims" id="lim-grid"></div>
+            </div>
+        </section>
+
+        <footer>
+            <p>Ferramenta independente de estudo, sem vínculo com bancas, organizações ou veículos citados. Os vídeos pertencem aos seus respectivos detentores e são exibidos pelos players originais (YouTube e ONU).</p>
+            <span>Criado por <b>Ana Carolina Caumo</b></span>
+        </footer>
+    </div>
+
+    <script>
+        // ================= PARA ADICIONAR UM VÍDEO NOVO: copie um bloco da lista abaixo e preencha =================
+        // title: título da página · sub: fonte/contexto · desc: uma ou duas frases · url: link da página do vídeo
+        // duration: duração aproximada · questions: nº de perguntas · tags: palavras-chave curtas
+        // opcionais: lang (par de idiomas, padrão 'EN → PT') · note (aviso que aparece em destaque no card) · duration e questions podem ficar de fora
+        // prova: true → mostra a etiqueta "Já apareceu na prova" no card (só use nos vídeos que realmente apareceram)
+        const VIDEOS = [
+            {
+                title: 'Entrevista com Mark Carney',
+                sub: 'Bloomberg Weekend Interview · Mishal Husain',
+                desc: 'Entrevista com o primeiro-ministro do Canadá sobre comércio, Ucrânia, Gaza e clima. Linguagem política, expressões coloquiais e vários falsos amigos.',
+                url: 'https://anacaumo.github.io/TIPSingles1/',
+                prova: true,
+                duration: '≈ 38 min',
+                questions: 25,
+                tags: ['Entrevista', 'Política', 'Economia', 'Expressões idiomáticas']
+            },
+            {
+                title: 'Coletiva da OMM sobre o El Niño',
+                sub: 'Organização Meteorológica Mundial · Imprensa',
+                desc: 'Coletiva de imprensa com a secretária-geral e o chefe de previsão climática. Terminologia técnica de meteorologia e linguagem institucional da ONU.',
+                url: 'https://anacaumo.github.io/TIPSingles2/',
+                prova: true,
+                duration: '≈ 37 min',
+                questions: 25,
+                tags: ['Coletiva', 'Clima', 'Terminologia técnica', 'ONU']
+            },
+            {
+                title: 'Discurso de Andy Burnham',
+                sub: 'Conferência do Partido Trabalhista · 2026',
+                desc: 'Discurso político longo, com vocabulário britânico de moradia, saúde, educação e previdência, além de expressões idiomáticas e referências culturais do Reino Unido.',
+                url: 'https://anacaumo.github.io/TIPSingles3/',
+                prova: true,
+                duration: '≈ 1h05',
+                questions: 25,
+                tags: ['Discurso', 'Política britânica', 'Vocabulário institucional', 'Expressões idiomáticas']
+            },
+            {
+                title: 'Coletiva da Procuradoria de São Francisco',
+                sub: 'Ação contra fabricantes de alimentos ultraprocessados',
+                desc: 'Coletiva de imprensa em que o procurador municipal anuncia um processo contra grandes fabricantes de ultraprocessados. Vocabulário jurídico, saúde pública e perguntas de jornalistas.',
+                url: 'https://anacaumo.github.io/TIPSingles4/',
+                prova: true,
+                duration: '≈ 30 min',
+                questions: 24,
+                tags: ['Coletiva', 'Direito', 'Saúde pública', 'Terminologia jurídica']
+            },
+            {
+                title: 'Coletiva de Serguei Lavrov',
+                sub: 'Assembleia Geral da ONU · 81ª sessão',
+                desc: 'Coletiva de imprensa com linguagem diplomática e política, expressões coloquiais e termos carregados. As perguntas de avaliador desta página são feitas em russo.',
+                note: 'a transcrição desta página tem lacunas. Algumas perguntas feitas em inglês pelos jornalistas não foram transcritas, então partes do vídeo aparecem sem texto.',
+                lang: 'RU → PT',
+                url: 'https://anacaumo.github.io/TIPSrusso1/',
+                duration: '≈ 1h05',
+                questions: 25,
+                tags: ['Coletiva', 'Diplomacia', 'ONU', 'Transcrição incompleta']
+            },
+            {
+                title: 'Entrevista de Volodymyr Zelensky',
+                sub: 'Jornalistas da Ásia Central · maio de 2024',
+                desc: 'Entrevista a jornalistas da Ásia Central sobre a guerra na Ucrânia, com linguagem política e expressões carregadas. As perguntas de avaliador desta página são feitas em russo.',
+                lang: 'RU → PT',
+                url: 'https://anacaumo.github.io/TIPSrusso2/',
+                duration: '≈ 1h10',
+                questions: 25,
+                tags: ['Entrevista', 'Política', 'Guerra na Ucrânia']
+            },
+            {
+                title: 'Coletiva de início de ano de Giorgia Meloni',
+                sub: 'Presidente do Conselho · 9 de janeiro de 2026',
+                desc: 'Coletiva de imprensa longa, com perguntas de muitos jornalistas. Vocabulário político, jurídico e trabalhista da Itália, com termos ligados ao ordenamento italiano.',
+                lang: 'IT → PT',
+                url: 'https://anacaumo.github.io/TIPSitaliano1/',
+                duration: '≈ 3h',
+                questions: 49,
+                tags: ['Coletiva', 'Política italiana', 'Terminologia jurídica']
+            }
+        ];
+
+        const FEATURES = [
+            { icon: 'play', title: 'Vídeo e transcrição juntos', text: 'A transcrição rola sozinha acompanhando a fala. Clicar em um turno leva o vídeo àquele ponto.' },
+            { icon: 'cols', title: 'Original e português lado a lado', text: 'Cada turno aparece nos dois idiomas, com a cor de cada falante. Dá para ver só o original, só o português ou os dois.' },
+            { icon: 'search', title: 'Busca nas transcrições', text: 'Procure qualquer palavra, em inglês ou em português, e veja só os turnos em que ela aparece.' },
+            { icon: 'help', title: 'Perguntas do avaliador', text: 'Perguntas no formato “como você traduziu X? Justifique”, cada uma com horário clicável, tradução e resposta esperada.' },
+            { icon: 'quote', title: 'Trecho com destaque', text: 'Abra o trecho da transcrição com a expressão destacada e os turnos vizinhos esmaecidos, para ver o contexto.' },
+            { icon: 'check', title: 'Autoavaliação', text: 'Marque Acertei, Quase ou Errei, filtre “Para rever” e embaralhe a ordem. O progresso fica salvo no seu navegador.' },
+            { icon: 'type', title: 'Leitura confortável', text: 'Modo escuro, tamanho da letra ajustável e o vídeo redimensionável arrastando a barra.' }
+        ];
+
+        const LIMITS = [
+            { title: 'A tradução foi feita com IA', text: 'O português das transcrições e os gabaritos foram produzidos com inteligência artificial. Podem ter imprecisões, e você pode (e deve) discordar. Em muitas perguntas há mais de uma solução defensável.' },
+            { title: 'A transcrição original é automática', text: 'Ela foi gerada a partir do áudio e pode conter erros de reconhecimento de fala, como nomes, números, termos técnicos e frases truncadas. A tradução herda esses problemas ou tenta corrigi-los pelo sentido.' },
+            { title: 'Nem toda transcrição está completa', text: 'Na página da coletiva de Lavrov, algumas perguntas feitas em inglês não foram transcritas, então há trechos sem texto. As demais páginas não têm esse problema conhecido, mas vale conferir no vídeo.' },
+            { title: 'Os horários são estimativas', text: 'Cada pergunta aponta para um ponto um pouco antes da expressão. Os segundos são aproximados, e vale conferir no vídeo.' },
+            { title: 'O progresso fica só no seu navegador', text: 'As avaliações e preferências são salvas no próprio aparelho. Trocar de navegador ou aparelho, ou limpar os dados do site, apaga tudo.' },
+            { title: 'Os vídeos vêm de players externos', text: 'Se o YouTube ou a ONU mudarem ou bloquearem a incorporação, o vídeo pode não carregar, ou carregar sem que a página consiga controlá-lo (os cliques nos horários deixam de pular).' },
+            { title: 'Material de estudo, não oficial', text: 'A ferramenta não substitui orientação profissional nem garante resultado em prova alguma.' }
+        ];
+
+        const ICONS = {
+            play: '<circle cx="12" cy="12" r="10"></circle><polygon points="10 8 16 12 10 16 10 8"></polygon>',
+            cols: '<rect x="3" y="4" width="8" height="16" rx="1.5"></rect><rect x="13" y="4" width="8" height="16" rx="1.5"></rect>',
+            search: '<circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line>',
+            help: '<circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line>',
+            quote: '<line x1="4" y1="6" x2="20" y2="6"></line><line x1="4" y1="12" x2="20" y2="12"></line><line x1="4" y1="18" x2="14" y2="18"></line>',
+            check: '<polyline points="20 6 9 17 4 12"></polyline>',
+            type: '<polyline points="4 7 4 4 20 4 20 7"></polyline><line x1="9" y1="20" x2="15" y2="20"></line><line x1="12" y1="4" x2="12" y2="20"></line>',
+            alert: '<path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line>',
+            arrow: '<line x1="5" y1="12" x2="19" y2="12"></line><polyline points="12 5 19 12 12 19"></polyline>',
+            plus: '<line x1="12" y1="5" x2="12" y2="19"></line><line x1="5" y1="12" x2="19" y2="12"></line>'
+        };
+        const svg = (name, size = 16) => `<svg class="i" xmlns="http://www.w3.org/2000/svg" width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[name]}</svg>`;
+        const esc = s => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+        const $ = id => document.getElementById(id);
+
+        // Vídeos
+        const LANG_LABEL = { EN: 'Inglês', RU: 'Russo', IT: 'Italiano' };
+        const langKey = v => (v.lang || 'EN → PT').split(' ')[0];
+        function renderVideos(filter) {
+        const list = filter === 'ALL' ? VIDEOS : VIDEOS.filter(v => langKey(v) === filter);
+        $('video-grid').innerHTML = list.map((v, i) => `
+            <a class="card vcard" href="${esc(v.url)}" target="_blank" rel="noopener">
+                <div class="vtop">
+                    <span class="n">${i + 1}</span>
+                    ${v.prova ? `<span class="badge-prova">${svg('check', 12)}Já apareceu na prova</span>` : ''}
+                </div>
+                <h3>${esc(v.title)}</h3>
+                <div class="sub">${esc(v.sub)}</div>
+                <p class="desc">${esc(v.desc)}</p>
+                ${v.note ? `<p class="vnote"><b>Atenção:</b> ${esc(v.note)}</p>` : ''}
+                <div class="meta">
+                    <span class="chip">${esc(v.lang || 'EN → PT')}</span>
+                    ${v.duration ? `<span class="chip">${esc(v.duration)}</span>` : ''}
+                    ${v.questions ? `<span class="chip">${esc(v.questions)} perguntas</span>` : ''}
+                    ${(v.tags || []).map(t => `<span class="chip">${esc(t)}</span>`).join('')}
+                </div>
+                <span class="go">Abrir página ${svg('arrow', 14)}</span>
+            </a>`).join('') + `
+            <div class="card vcard soon">
+                ${svg('plus', 22)}
+                <strong style="margin-top:.5rem">Mais vídeos em breve</strong>
+                <span>Novos materiais serão adicionados aqui.</span>
+            </div>`;
+        }
+
+        // Seletor de idioma: inglês vem pré-selecionado; "Todos" mostra tudo
+        const langKeys = [...new Set(VIDEOS.map(langKey))].sort((a, b) => (a === 'EN' ? -1 : b === 'EN' ? 1 : 0));
+        const langOpts = [
+            ...langKeys.map(k => ({ k, label: LANG_LABEL[k] || k, n: VIDEOS.filter(v => langKey(v) === k).length })),
+            { k: 'ALL', label: 'Todos', n: VIDEOS.length }
+        ];
+        let currentLang = langKeys.includes('EN') ? 'EN' : (langKeys[0] || 'ALL');
+        function paintLangSeg() {
+            $('lang-seg').innerHTML = langOpts.map(o =>
+                `<button type="button" aria-pressed="${o.k === currentLang}" data-k="${esc(o.k)}">${esc(o.label)} <span class="c">${o.n}</span></button>`).join('');
+        }
+        $('lang-seg').addEventListener('click', e => {
+            const b = e.target.closest('button[data-k]');
+            if (!b) return;
+            currentLang = b.dataset.k;
+            paintLangSeg();
+            renderVideos(currentLang);
+        });
+        paintLangSeg();
+        renderVideos(currentLang);
+
+        // Números do topo
+        const totalQ = VIDEOS.reduce((a, v) => a + (Number(v.questions) || 0), 0);
+        const allCounted = VIDEOS.every(v => Number(v.questions) > 0); // se algum vídeo ainda não tem o nº de perguntas, o total aparece com "+"
+        $('stats').innerHTML = [`${VIDEOS.length} vídeos`, `${totalQ}${allCounted ? '' : '+'} perguntas`, 'Original + PT lado a lado'].map(t => `<span class="chip">${esc(t)}</span>`).join('');
+
+        // Funcionalidades e limitações
+        $('feat-grid').innerHTML = FEATURES.map(f => `
+            <div class="card">
+                <div class="ico">${svg(f.icon, 18)}</div>
+                <h3>${esc(f.title)}</h3>
+                <p>${esc(f.text)}</p>
+            </div>`).join('');
+        $('lim-grid').innerHTML = LIMITS.map(l => `
+            <div class="lim">
+                <h3><span class="dot">${svg('alert', 13)}</span>${esc(l.title)}</h3>
+                <p>${esc(l.text)}</p>
+            </div>`).join('');
+
+        // Prévia: mostrar/esconder a resposta
+        $('demo-reveal').addEventListener('click', () => {
+            const a = $('demo-answer'), b = $('demo-reveal');
+            const open = a.classList.toggle('open');
+            b.classList.toggle('open', open);
+            b.setAttribute('aria-expanded', String(open));
+            b.textContent = open ? 'Esconder tradução e resposta' : 'Mostrar tradução e resposta';
+        });
+
+        // Tema escuro (mesma chave das páginas dos vídeos)
+        (function () {
+            const KEY = 'translationPracticeTheme';
+            const root = document.documentElement, btn = $('theme-btn');
+            const mq = window.matchMedia ? matchMedia('(prefers-color-scheme: dark)') : null;
+            const hasSaved = () => { try { return !!localStorage.getItem(KEY); } catch (e) { return false; } };
+            function paint() {
+                const dark = root.classList.contains('dark');
+                const label = dark ? 'Mudar para o modo claro' : 'Mudar para o modo escuro';
+                btn.setAttribute('aria-pressed', String(dark)); btn.setAttribute('aria-label', label); btn.title = label;
+                $('theme-label').textContent = dark ? 'Modo claro' : 'Modo escuro';
+            }
+            btn.addEventListener('click', () => {
+                const dark = !root.classList.contains('dark');
+                root.classList.toggle('dark', dark);
+                try { localStorage.setItem(KEY, dark ? 'dark' : 'light'); } catch (e) {}
+                paint();
+            });
+            if (mq) {
+                const follow = e => { if (!hasSaved()) { root.classList.toggle('dark', e.matches); paint(); } };
+                if (mq.addEventListener) mq.addEventListener('change', follow); else if (mq.addListener) mq.addListener(follow);
+            }
+            paint();
+        })();
+    </script>
+</body>
+</html>
